@@ -20,7 +20,7 @@ The repository contains the shared web player, TV builds, Electron integration, 
 
 The React Native test application lives in [`ReactNativeExample`](ReactNativeExample/README.md). It includes Android mobile, Android TV, iOS/tvOS project files, player configuration screens, live TV presets, and VOD episode flows.
 
-Versionable sample data is stored in [`ReactNativeExample/src/demoDataExample.js`](ReactNativeExample/src/demoDataExample.js). Copy it to `src/demoData.js` inside the example app when you need local/private stream URLs; `demoData.js` is ignored by Git.
+Versionable sample data is stored in [`ReactNativeExample/src/demoDataExample.js`](ReactNativeExample/src/demoDataExample.js).
 
 ## Package
 
