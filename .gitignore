@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+dist-*/
+.buildResult/
+coverage/
+**/coverage/
+
+# Android / Capacitor generated output
+.gradle/
+**/.gradle/
+android/**/build/
+android/**/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/capacitor-cordova-android-plugins/
+
+# Native packages and installers
+packages/
+packages-signed/
+packages-webos/
+*.apk
+*.aab
+*.aar
+*.ap_
+*.ipa
+*.ipk
+*.wgt
+*.exe
+*.blockmap
+*.dmg
+*.AppImage
+*.deb
+
+# Local demo data / private stream URLs
+ReactNativeExample/src/demoData.js
+**/demoData.local.js
+**/demoData.local.*
+
+# Logs and local system files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+{
+  "id": "tv.omni.player.webos",
+  "title": "Omni Video Player",
+  "main": "index.html",
+  "icon": "icon.png",
+  "type": "web",
+  "vendor": "Omni Video Player",
+  "version": "2.0.0",
+  "appDescription": "Universal video player for LG webOS TV.",
+  "resolution": "1920x1080",
+  "bgColor": "#090b10",
+  "iconColor": "#090b10",
+  "transparent": false,
+  "disableBackHistoryAPI": true,
+  "supportPortraitMode": false
+}

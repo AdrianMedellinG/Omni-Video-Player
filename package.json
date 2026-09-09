@@ -1,0 +1,87 @@
+{
+  "name": "omni-video-player",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Omni video player for web (React), Android (React Native), Samsung Tizen, Lg Webos and Electron.js",
+  "author": "https://github.com/AdrianMedellinG",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode web",
+    "dev:web": "vite --mode web",
+    "dev:tizen": "vite --mode tizen",
+    "dev:webos": "vite --mode webos",
+    "build": "npm run build:web",
+    "build:web": "vite build --mode web",
+    "build:tizen": "vite build --mode tizen",
+    "build:webos": "vite build --mode webos",
+    "build:all": "npm run build:web && npm run build:tizen && npm run build:webos",
+    "preview:web": "vite preview --mode web",
+    "preview:tizen": "vite preview --mode tizen",
+    "preview:webos": "vite preview --mode webos",
+    "build:android": "npm run build:web && npx cap sync android",
+    "android:open": "npx cap open android",
+    "android:run": "npm run build:android && npx cap run android",
+    "android:copy": "npm run build:android",
+    "electron:dev": "npm run build:web && node scripts/run-electron.cjs .",
+    "electron:run": "node scripts/run-electron.cjs .",
+    "electron:pack": "npm run build:web && electron-builder --dir",
+    "electron:dist": "npm run build:web && electron-builder",
+    "webos:check": "npm run build:webos && ares-package --check dist-webos",
+    "webos:package": "npm run build:webos && ares-package --outdir packages-webos dist-webos"
+  },
+  "dependencies": {
+    "@amedellin85/react-native-video": "^6.3.0",
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.1",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mediabunny/ac3": "^1.51.0",
+    "@mui/icons-material": "^7.3.1",
+    "@mui/material": "^7.3.1",
+    "hls.js": "^1.6.13",
+    "mediabunny": "^1.51.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^44.1.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.1",
+    "webostvjs": "^1.2.13"
+  },
+  "build": {
+    "appId": "tv.omni.player.desktop",
+    "productName": "Omni Video Player",
+    "asar": true,
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist-web/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    }
+  }
+}

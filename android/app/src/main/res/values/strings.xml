@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Omni Video Player</string>
+    <string name="title_activity_main">Omni Video Player</string>
+    <string name="package_name">tv.omni.player</string>
+    <string name="custom_url_scheme">tv.omni.player</string>
+</resources>
