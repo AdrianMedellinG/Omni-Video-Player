@@ -12,9 +12,9 @@ The repository contains the shared web player, TV builds, Electron integration, 
 | Electron.js | Electron renderer + main/preload PiP integration | [Electron README](README.electron.md) |
 | Samsung Tizen TV | Tizen Web Application + Samsung AVPlay | [Tizen README](README.tizen.md) |
 | LG webOS TV | webOS web app packaged with `ares-package` | [webOS README](README.webos.md) |
-| Android | React Native + `@amedellin85/react-native-video` | [React Native README](react-native/README.md) |
-| iPhone / iOS | React Native + AVPlayer | [React Native README](react-native/README.md) |
-| tvOS | React Native TV / `react-native-tvos` | [React Native README](react-native/README.md) |
+| Android | React Native | [React Native README](react-native/README.md) |
+| iPhone / iOS | React Native | [React Native README](react-native/README.md) |
+| tvOS | React Native TV | [React Native README](react-native/README.md) |
 
 ## Example App
 
