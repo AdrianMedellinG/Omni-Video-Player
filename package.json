@@ -6,6 +6,11 @@
   "author": "https://github.com/AdrianMedellinG",
   "main": "electron/main.cjs",
   "type": "module",
+   "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AdrianMedellinG/Omni-Video-Player.git"
+  },
+    "license": "MIT",
   "scripts": {
     "dev": "vite --mode web",
     "dev:web": "vite --mode web",
