@@ -490,6 +490,7 @@ export default function PlayerControls({
   const [activeSettingsPanel, setActiveSettingsPanel] = useState(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [focusedControlTooltip, setFocusedControlTooltip] = useState(null);
+  const [progressFocused, setProgressFocused] = useState(false);
   const hideTimerRef = useRef(null);
   const keyboardSeekTimerRef = useRef(null);
   const keyboardSeekValueRef = useRef(null);
@@ -569,6 +570,7 @@ export default function PlayerControls({
   const showTopMetadata = Boolean(!isLive && !isConstrainedLayout && (title || subtitle));
   const showInlineChannelMeta = Boolean(!isLive && !isConstrainedLayout && (channelName || epgTitle));
   const showLiveInfoPanel = Boolean(isLive && !isMiniLayout && (liveChannelLabel || channelLogo || liveTitleLabel || liveMetaLabel));
+  const showProgressSeekHint = Boolean(onProgressSeek && Number(progressSeekStep) > 0);
   const topInset = isMiniLayout ? 8 : isCompactLayout ? 14 : 24;
   const topOffset = isMiniLayout ? 8 : isCompactLayout ? 12 : 18;
   const controlSpacing = isMiniLayout ? 0.25 : isCompactLayout ? 0.6 : 1;
@@ -1271,7 +1273,27 @@ export default function PlayerControls({
         )}
 
         {!isLive && (
-        <Box sx={{ position: 'absolute', left: progressInset, right: progressInset, bottom: progressBottom, zIndex: 12, pointerEvents: visible ? 'auto' : 'none' }}>
+        <Box
+          data-player-progress-focused={progressFocused ? 'true' : undefined}
+          sx={{
+            position: 'absolute',
+            left: progressInset,
+            right: progressInset,
+            bottom: progressBottom,
+            zIndex: 12,
+            pointerEvents: visible ? 'auto' : 'none',
+            px: progressFocused ? { xs: 1.1, md: 1.6 } : 0,
+            py: progressFocused ? { xs: 0.8, md: 1 } : 0,
+            mx: progressFocused ? { xs: -1.1, md: -1.6 } : 0,
+            mb: progressFocused ? { xs: -0.8, md: -1 } : 0,
+            borderRadius: 1.25,
+            bgcolor: progressFocused ? 'rgba(15,18,26,.78)' : 'transparent',
+            boxShadow: progressFocused
+              ? `0 0 0 3px ${alphaColor(primaryColor, 0.72)}, 0 12px 34px rgba(0,0,0,.52)`
+              : 'none',
+            transition: 'background-color 120ms ease, box-shadow 120ms ease, padding 120ms ease, margin 120ms ease',
+          }}
+        >
           <Slider
             data-tv-focusable={isMiniLayout ? undefined : 'true'}
             data-player-progress="true"
@@ -1280,6 +1302,11 @@ export default function PlayerControls({
             max={maxDuration}
             value={Math.min(displayedTime, maxDuration)}
             disabled={!playable}
+            onFocusCapture={() => setProgressFocused(true)}
+            onBlurCapture={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!nextTarget || !event.currentTarget.contains(nextTarget)) setProgressFocused(false);
+            }}
             onKeyDownCapture={(event) => {
               if (!queueKeyboardSeek(getProgressArrowDirection(event))) return;
               event.preventDefault();
@@ -1302,20 +1329,52 @@ export default function PlayerControls({
             size="small"
             sx={{
               color: primaryColor,
-              py: 0,
-              '& .MuiSlider-track': { border: 0 },
-              '& .MuiSlider-rail': { color: 'rgba(255,255,255,.62)', opacity: 1 },
-              '& .MuiSlider-thumb': { width: isMiniLayout ? 10 : 16, height: isMiniLayout ? 10 : 16 },
+              py: progressFocused ? 0.45 : 0,
+              '& .MuiSlider-track': {
+                border: 0,
+                height: progressFocused ? 8 : 4,
+                transition: 'height 120ms ease',
+              },
+              '& .MuiSlider-rail': {
+                color: progressFocused ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.62)',
+                height: progressFocused ? 8 : 4,
+                opacity: 1,
+                transition: 'height 120ms ease, color 120ms ease',
+              },
+              '& .MuiSlider-thumb': {
+                width: progressFocused ? (isMiniLayout ? 14 : 24) : (isMiniLayout ? 10 : 16),
+                height: progressFocused ? (isMiniLayout ? 14 : 24) : (isMiniLayout ? 10 : 16),
+                bgcolor: '#fff',
+                border: progressFocused ? `4px solid ${primaryColor}` : '0 solid transparent',
+                boxShadow: progressFocused ? `0 0 0 7px ${alphaColor(primaryColor, 0.28)}` : 'none',
+                transition: 'width 120ms ease, height 120ms ease, border 120ms ease, box-shadow 120ms ease',
+              },
+              '&:focus-visible, &.Mui-focusVisible, &.tv-remote-focused': {
+                outline: 'none !important',
+                boxShadow: 'none !important',
+              },
             }}
           />
           {!isMiniLayout && (
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.5 }}>
+          <Stack data-progress-meta="true" direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.5 }}>
             <Typography sx={{ fontSize: { xs: 16, md: 22 }, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
               {formatTime(displayedTime)}
             </Typography>
             <Stack direction="row" alignItems="center" spacing={1.25}>
-              {onProgressSeek && Number(progressSeekStep) > 0 && (
-                <Typography sx={{ fontSize: { xs: 12, md: 16 }, fontWeight: 800, color: 'rgba(255,255,255,.78)' }}>
+              {showProgressSeekHint && (
+                <Typography
+                  data-progress-step-hint="true"
+                  sx={{
+                    px: progressFocused ? 1 : 0,
+                    py: progressFocused ? 0.4 : 0,
+                    borderRadius: 0.75,
+                    bgcolor: progressFocused ? alphaColor(primaryColor, 0.86) : 'transparent',
+                    fontSize: { xs: 12, md: 16 },
+                    fontWeight: 900,
+                    color: progressFocused ? '#fff' : 'rgba(255,255,255,.78)',
+                    textShadow: progressFocused ? '0 1px 3px #000' : 'none',
+                  }}
+                >
                   ◀/▶ ±5 min
                 </Typography>
               )}

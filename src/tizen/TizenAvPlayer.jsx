@@ -259,6 +259,132 @@ function getAvplayScreenSize() {
   };
 }
 
+function toPositiveNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const match = String(value).match(/\d+(?:\.\d+)?/);
+  const number = Number(match?.[0]);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function getVideoSizeFromExtraInfo(extraInfo) {
+  const extra = safeJson(extraInfo, {});
+  const width = toPositiveNumber(
+    extra.Width
+    ?? extra.width
+    ?? extra.WIDTH
+    ?? extra.videoWidth
+    ?? extra.VideoWidth
+    ?? extra.max_width,
+  );
+  const height = toPositiveNumber(
+    extra.Height
+    ?? extra.height
+    ?? extra.HEIGHT
+    ?? extra.videoHeight
+    ?? extra.VideoHeight
+    ?? extra.max_height,
+  );
+
+  if (width && height) return { width, height };
+
+  const text = typeof extraInfo === 'string' ? extraInfo : JSON.stringify(extra || {});
+  const resolution = text.match(/(\d{2,5})\s*[xX]\s*(\d{2,5})/);
+  if (resolution) {
+    return {
+      width: toPositiveNumber(resolution[1]),
+      height: toPositiveNumber(resolution[2]),
+    };
+  }
+
+  const widthMatch = text.match(/"?Width"?\s*:\s*"?(\d{2,5})/i);
+  const heightMatch = text.match(/"?Height"?\s*:\s*"?(\d{2,5})/i);
+  return {
+    width: toPositiveNumber(widthMatch?.[1]),
+    height: toPositiveNumber(heightMatch?.[1]),
+  };
+}
+
+function getVideoSizeFromStreamInfo(streamInfo = []) {
+  const tracks = Array.isArray(streamInfo) ? streamInfo : [];
+  for (const track of tracks) {
+    if (track?.type && track.type !== 'VIDEO') continue;
+    const directSize = {
+      width: toPositiveNumber(track.width),
+      height: toPositiveNumber(track.height),
+    };
+    if (directSize.width && directSize.height) return directSize;
+
+    const extraSize = getVideoSizeFromExtraInfo(track?.extra_info ?? track?.extraInfo);
+    if (extraSize.width && extraSize.height) return extraSize;
+  }
+  return { width: 0, height: 0 };
+}
+
+function readAvplayVideoSize(av) {
+  try {
+    const size = av.getVideoSize?.();
+    const width = toPositiveNumber(size?.width);
+    const height = toPositiveNumber(size?.height);
+    if (width && height) return { width, height };
+  } catch {
+    // getVideoSize is only available on some devices/content types.
+  }
+
+  const readers = [
+    () => av.getCurrentStreamInfo?.(),
+    () => av.getTotalTrackInfo?.(),
+  ];
+
+  for (const readInfo of readers) {
+    try {
+      const size = getVideoSizeFromStreamInfo(readInfo());
+      if (size.width && size.height) return size;
+    } catch {
+      // Stream info is state-sensitive on AVPlay.
+    }
+  }
+
+  return { width: 0, height: 0 };
+}
+
+function getResizeDisplayRect(container, videoSize, resizeMode, options = {}) {
+  const normalizedMode = normalizeResizeMode(resizeMode);
+  const base = {
+    x: Number(container.x) || 0,
+    y: Number(container.y) || 0,
+    width: Math.max(1, Number(container.width) || 1),
+    height: Math.max(1, Number(container.height) || 1),
+  };
+
+  if (normalizedMode === 'stretch' || normalizedMode === 'cover') return base;
+
+  const videoWidth = toPositiveNumber(videoSize?.width);
+  const videoHeight = toPositiveNumber(videoSize?.height);
+  if (!videoWidth || !videoHeight) return base;
+
+  const containScale = Math.min(base.width / videoWidth, base.height / videoHeight);
+  const scale = normalizedMode === 'none' || normalizedMode === 'center'
+    ? Math.min(1, containScale)
+    : containScale;
+  const width = Math.max(1, videoWidth * scale);
+  const height = Math.max(1, videoHeight * scale);
+  const fitted = {
+    x: base.x + (base.width - width) / 2,
+    y: base.y + (base.height - height) / 2,
+    width,
+    height,
+  };
+
+  if (!options.clamp) return fitted;
+
+  return {
+    x: Math.max(0, Math.round(fitted.x)),
+    y: Math.max(0, Math.round(fitted.y)),
+    width: Math.max(1, Math.round(fitted.width)),
+    height: Math.max(1, Math.round(fitted.height)),
+  };
+}
+
 function getHttpFallbackUrl(src) {
   try {
     const url = new URL(src);
@@ -434,6 +560,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
   const readyForDisplayRef = useRef(false);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef(null);
+  const naturalVideoSizeRef = useRef({ width: 0, height: 0 });
 
   const [status, setStatus] = useState('idle');
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -546,6 +673,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     retryCountRef.current = 0;
     if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     retryTimerRef.current = null;
+    naturalVideoSizeRef.current = { width: 0, height: 0 };
     setHasLoaded(false);
     setRetryAttempt(0);
     setPlaybackSrc(src);
@@ -575,6 +703,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     const frame = frameRef.current;
     if (!av || !frame) return;
 
+    const object = objectRef.current;
     const rect = frame.getBoundingClientRect();
     const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 1920;
     const viewportHeight = document.documentElement.clientHeight || window.innerHeight || 1080;
@@ -587,7 +716,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     const visibleBottom = Math.min(viewportHeight, rect.bottom);
     const visibleWidth = Math.max(1, visibleRight - visibleLeft);
     const visibleHeight = Math.max(1, visibleBottom - visibleTop);
-    const displayRect = fullscreenRef.current
+    const baseDisplayRect = fullscreenRef.current
       ? { x: 0, y: 0, width: screenSize.width, height: screenSize.height }
       : {
         x: Math.max(0, Math.round(visibleLeft * sx)),
@@ -595,18 +724,44 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
         width: Math.min(screenSize.width, Math.round(visibleWidth * sx)),
         height: Math.min(screenSize.height, Math.round(visibleHeight * sy)),
       };
+    const baseObjectRect = fullscreenRef.current
+      ? {
+        x: 0,
+        y: 0,
+        width: viewportWidth,
+        height: viewportHeight,
+      }
+      : {
+        x: Math.max(0, visibleLeft - rect.left),
+        y: Math.max(0, visibleTop - rect.top),
+        width: visibleWidth,
+        height: visibleHeight,
+      };
+    const currentMode = normalizeResizeMode(optionsRef.current.resizeMode);
+    const latestVideoSize = readAvplayVideoSize(av);
+    if (latestVideoSize.width && latestVideoSize.height) {
+      naturalVideoSizeRef.current = latestVideoSize;
+    }
+    const naturalVideoSize = naturalVideoSizeRef.current;
+    const displayRect = getResizeDisplayRect(baseDisplayRect, naturalVideoSize, currentMode, { clamp: true });
+    const objectRect = getResizeDisplayRect(baseObjectRect, naturalVideoSize, currentMode);
+    const displayMethod = currentMode === 'contain'
+      ? 'PLAYER_DISPLAY_MODE_LETTER_BOX'
+      : 'PLAYER_DISPLAY_MODE_FULL_SCREEN';
 
     try {
+      if (object) {
+        object.style.left = `${objectRect.x}px`;
+        object.style.top = `${objectRect.y}px`;
+        object.style.width = `${objectRect.width}px`;
+        object.style.height = `${objectRect.height}px`;
+      }
+      av.setDisplayMethod?.(displayMethod);
       av.setDisplayRect(
         displayRect.x,
         displayRect.y,
         displayRect.width,
         displayRect.height,
-      );
-      av.setDisplayMethod?.(
-        optionsRef.current.resizeMode === 'cover' || optionsRef.current.resizeMode === 'stretch'
-          ? 'PLAYER_DISPLAY_MODE_FULL_SCREEN'
-          : 'PLAYER_DISPLAY_MODE_LETTER_BOX',
       );
     } catch (displayError) {
       console.warn('No se pudo actualizar setDisplayRect:', displayError);
@@ -627,10 +782,16 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
 
   const setResizeMode = useCallback((nextResizeMode) => {
     const normalizedResizeMode = normalizeResizeMode(nextResizeMode);
+    optionsRef.current = {
+      ...optionsRef.current,
+      resizeMode: normalizedResizeMode,
+    };
     setCurrentResizeMode(normalizedResizeMode);
+    requestAnimationFrame(updateDisplayRect);
+    window.setTimeout(updateDisplayRect, 80);
     callbacksRef.current.onResizeModeChange?.(normalizedResizeMode);
     return normalizedResizeMode;
-  }, []);
+  }, [updateDisplayRect]);
 
   const toggleResizeMode = useCallback(() => {
     const nextResizeMode = getNextResizeMode(currentResizeMode);
@@ -645,10 +806,18 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
       console.info('AVPlay track info:', rawTracks);
       const normalized = normalizeTracks(rawTracks);
       const current = av.getCurrentStreamInfo?.() || [];
+      const videoSize = getVideoSizeFromStreamInfo(current);
+      const fallbackVideoSize = videoSize.width && videoSize.height
+        ? videoSize
+        : getVideoSizeFromStreamInfo(rawTracks);
       const currentAudio = current.find((track) => track.type === 'AUDIO');
       const currentText = current.find((track) => track.type === 'TEXT');
+      const currentVideo = current.find((track) => track.type === 'VIDEO') || rawTracks.find((track) => track.type === 'VIDEO');
       const nextSelectedAudio = currentAudio ? String(currentAudio.index) : selectedAudioRef.current;
       const nextSelectedSubtitle = currentText ? String(currentText.index) : selectedSubtitleRef.current;
+      if (fallbackVideoSize.width && fallbackVideoSize.height) {
+        naturalVideoSizeRef.current = fallbackVideoSize;
+      }
 
       setAudioTracks((currentList) => {
         const next = mergeTrackLists(currentList, normalized.audio);
@@ -676,10 +845,21 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
         selectedSubtitleRef.current = String(currentText.index);
         setSelectedSubtitle(String(currentText.index));
       }
+      emitPlayerEvent(callbacksRef, 'onVideoTracks', {
+        videoTracks: mapVideoTracks([{
+          index: currentVideo?.index ?? 0,
+          trackId: currentVideo?.extra_info ? `avplay-${currentVideo.index}` : 'avplay',
+          codecs: safeJson(currentVideo?.extra_info, {}).fourCC || '',
+          width: fallbackVideoSize.width || naturalVideoSizeRef.current.width || 0,
+          height: fallbackVideoSize.height || naturalVideoSizeRef.current.height || 0,
+          selected: true,
+        }], currentVideo?.index ?? 0),
+      });
+      updateDisplayRect();
     } catch (trackError) {
       console.warn('No se pudieron leer las pistas AVPlay:', trackError);
     }
-  }, []);
+  }, [updateDisplayRect]);
 
   const getCurrentSeconds = useCallback(() => {
     const av = avRef.current;
@@ -1038,6 +1218,16 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
       try {
         updateDisplayRect();
         const loadedDuration = (av.getDuration?.() || 0) / 1000;
+        const loadedVideoSize = naturalVideoSizeRef.current;
+        const videoTracksPayload = mapVideoTracks([{
+          index: 0,
+          trackId: loadedVideoSize.width && loadedVideoSize.height
+            ? `avplay-${loadedVideoSize.width}x${loadedVideoSize.height}`
+            : 'avplay',
+          width: loadedVideoSize.width || 0,
+          height: loadedVideoSize.height || 0,
+          selected: true,
+        }], 0);
         durationRef.current = loadedDuration;
         setDuration(loadedDuration);
         refreshTracks();
@@ -1048,19 +1238,13 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
           currentTime: 0,
           audioTracks: mapAudioTracks(audioTracksRef.current, selectedAudioRef.current),
           textTracks: mapTextTracks(subtitleTracksRef.current, selectedSubtitleRef.current),
-          videoTracks: mapVideoTracks([{
-            index: 0,
-            trackId: 'avplay',
-            selected: true,
-          }], 0),
-          trackId: 'avplay',
+          videoTracks: videoTracksPayload,
+          width: loadedVideoSize.width || 0,
+          height: loadedVideoSize.height || 0,
+          trackId: videoTracksPayload[0]?.trackId || 'avplay',
         }), ['onReady']);
         emitPlayerEvent(callbacksRef, 'onVideoTracks', {
-          videoTracks: mapVideoTracks([{
-            index: 0,
-            trackId: 'avplay',
-            selected: true,
-          }], 0),
+          videoTracks: videoTracksPayload,
         });
         emitPlayerEvent(callbacksRef, 'onReadyForDisplay');
         readyForDisplayRef.current = true;
@@ -1152,7 +1336,14 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
           currentTimeRef.current = nextTime;
           setCurrentTime(nextTime);
         },
-        onevent() {},
+        onevent(eventId, eventData) {
+          if (eventId !== 'PLAYER_MSG_RESOLUTION_CHANGED') return;
+          const eventSize = getVideoSizeFromExtraInfo(eventData);
+          const nextSize = eventSize.width && eventSize.height ? eventSize : readAvplayVideoSize(av);
+          if (nextSize.width && nextSize.height) naturalVideoSizeRef.current = nextSize;
+          updateDisplayRect();
+          refreshTracks();
+        },
         onstreamcompleted() {
           setPlaying(false);
           const total = (av.getDuration?.() || 0) / 1000;
