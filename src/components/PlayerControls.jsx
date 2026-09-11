@@ -9,6 +9,7 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import AspectRatioRoundedIcon from '@mui/icons-material/AspectRatioRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import Forward10RoundedIcon from '@mui/icons-material/Forward10Rounded';
 import Forward30RoundedIcon from '@mui/icons-material/Forward30Rounded';
@@ -30,6 +31,7 @@ import {
   SUBTITLE_SIZE_PRESETS,
   SUBTITLE_STYLE_PRESETS,
 } from '../utils/subtitlePreferences.js';
+import { normalizeResizeMode } from '../utils/playerProps.js';
 
 function optionKey(option) {
   return String(option?.value ?? option?.id ?? option?.index ?? '');
@@ -51,6 +53,12 @@ const TOOLTIP_LABELS = {
     fullscreen: 'Fullscreen',
     pip: 'Picture in picture',
     pipExit: 'Exit picture in picture',
+    resizeMode: 'Resize mode',
+    resizeModeContain: 'Contain',
+    resizeModeCover: 'Cover',
+    resizeModeStretch: 'Stretch',
+    resizeModeCenter: 'Center',
+    resizeModeNone: 'Original',
     rewind: (seconds) => `Rewind ${seconds} seconds`,
     forward: (seconds) => `Forward ${seconds} seconds`,
     pause: 'Pause',
@@ -84,6 +92,12 @@ const TOOLTIP_LABELS = {
     fullscreen: 'Pantalla completa',
     pip: 'Imagen en imagen',
     pipExit: 'Salir de imagen en imagen',
+    resizeMode: 'Modo de imagen',
+    resizeModeContain: 'Contener',
+    resizeModeCover: 'Cubrir',
+    resizeModeStretch: 'Estirar',
+    resizeModeCenter: 'Centrar',
+    resizeModeNone: 'Original',
     rewind: (seconds) => `-${seconds} segundos`,
     forward: (seconds) => `+${seconds} segundos`,
     pause: 'Pausar',
@@ -285,7 +299,7 @@ function SettingsOptionList({ panel, options, selected, onSelect, primaryColor, 
               clipPath: 'inset(0 round 6px)',
               backgroundClip: 'padding-box',
               textAlign: 'left',
-              '&&:focus, &&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
+              '&&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
                 bgcolor: primaryColor,
                 color: '#fff',
                 borderRadius: 0.75,
@@ -341,7 +355,7 @@ function SettingsAppearanceList({ appearance = DEFAULT_SUBTITLE_APPEARANCE, onSe
               clipPath: 'inset(0 round 6px)',
               backgroundClip: 'padding-box',
               textAlign: 'left',
-              '&&:focus, &&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
+              '&&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
                 bgcolor: primaryColor,
                 color: '#fff',
                 borderRadius: 0.75,
@@ -396,7 +410,7 @@ function SettingsAppearanceList({ appearance = DEFAULT_SUBTITLE_APPEARANCE, onSe
               clipPath: 'inset(0 round 6px)',
               backgroundClip: 'padding-box',
               textAlign: 'left',
-              '&&:focus, &&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
+              '&&:focus-visible, &&.Mui-focusVisible, &&[data-tv-focused="true"], &&.tv-remote-focused': {
                 bgcolor: primaryColor,
                 color: '#fff',
                 borderRadius: 0.75,
@@ -442,6 +456,8 @@ export default function PlayerControls({
   subtitleOptions = [],
   selectedSubtitle,
   subtitleAppearance = DEFAULT_SUBTITLE_APPEARANCE,
+  playerLayout,
+  resizeMode = 'contain',
   onBack,
   onReload,
   onToggle,
@@ -452,15 +468,18 @@ export default function PlayerControls({
   progressSeekStep = 0,
   onSelectAudio,
   onSelectSubtitle,
+  onToggleResizeMode,
   onFullscreen,
   onPictureInPicture,
   pictureInPictureActive = false,
   onVisibilityChange,
   onSettingsStateChange,
   settingsBackSignal = 0,
+  showBackButton = true,
   showSettingsBackButton = true,
   showFullscreenButton = true,
   showPictureInPictureButton = true,
+  showResizeModeButton = true,
   showFocusedTooltips = false,
   onSubtitleAppearanceChange,
   hideSignal = 0,
@@ -496,6 +515,21 @@ export default function PlayerControls({
   const rewindTooltip = tooltipLabels.rewind(resolvedRewindStep);
   const forwardTooltip = tooltipLabels.forward(resolvedForwardStep);
   const pictureInPictureTooltip = pictureInPictureActive ? tooltipLabels.pipExit : tooltipLabels.pip;
+  const normalizedResizeMode = normalizeResizeMode(resizeMode);
+  const resizeModeLabels = {
+    contain: tooltipLabels.resizeModeContain,
+    cover: tooltipLabels.resizeModeCover,
+    stretch: tooltipLabels.resizeModeStretch,
+    center: tooltipLabels.resizeModeCenter,
+    none: tooltipLabels.resizeModeNone,
+  };
+  const resizeModeTooltip = `${tooltipLabels.resizeMode}: ${resizeModeLabels[normalizedResizeMode] || normalizedResizeMode}`;
+  const layoutDensity = ['mini', 'compact', 'regular'].includes(playerLayout?.density)
+    ? playerLayout.density
+    : 'regular';
+  const isMiniLayout = layoutDensity === 'mini';
+  const isCompactLayout = layoutDensity === 'compact';
+  const isConstrainedLayout = layoutDensity !== 'regular';
 
   const info = overlay || {};
   const title = info.title || info.name || info.epgTitle || '';
@@ -526,6 +560,23 @@ export default function PlayerControls({
   const hasSubtitleTracks = subtitleOptions.length > 0;
   const hasAudioSettings = hasMultipleAudioTracks || (hasSubtitleTracks && audioOptions.length > 0);
   const hasTrackSettings = hasMultipleAudioTracks || hasSubtitleTracks;
+  const showRestartControl = Boolean(onReload && !isLive && !isMiniLayout);
+  const showSettingsControl = Boolean(hasTrackSettings && !isMiniLayout);
+  const showResizeModeControl = Boolean(showResizeModeButton && onToggleResizeMode && !isMiniLayout);
+  const showPictureInPictureControl = Boolean(showPictureInPictureButton && onPictureInPicture);
+  const showFullscreenControl = Boolean(showFullscreenButton && onFullscreen && !isMiniLayout);
+  const showSeekControls = Boolean(!isMiniLayout && !isLive);
+  const showTopMetadata = Boolean(!isLive && !isConstrainedLayout && (title || subtitle));
+  const showInlineChannelMeta = Boolean(!isLive && !isConstrainedLayout && (channelName || epgTitle));
+  const showLiveInfoPanel = Boolean(isLive && !isMiniLayout && (liveChannelLabel || channelLogo || liveTitleLabel || liveMetaLabel));
+  const topInset = isMiniLayout ? 8 : isCompactLayout ? 14 : 24;
+  const topOffset = isMiniLayout ? 8 : isCompactLayout ? 12 : 18;
+  const controlSpacing = isMiniLayout ? 0.25 : isCompactLayout ? 0.6 : 1;
+  const centerSpacing = isCompactLayout ? { xs: 1.5, md: 3 } : { xs: 3, md: 7 };
+  const seekIconSize = isCompactLayout ? { xs: 38, md: 46 } : { xs: 46, md: 58 };
+  const playIconSize = isMiniLayout ? { xs: 44, md: 52 } : isCompactLayout ? { xs: 50, md: 62 } : { xs: 58, md: 76 };
+  const progressInset = isMiniLayout ? 12 : isCompactLayout ? 18 : 28;
+  const progressBottom = isMiniLayout ? 10 : isCompactLayout ? 14 : 20;
   const settingsItemSx = {
     position: 'relative',
     minWidth: 0,
@@ -537,7 +588,7 @@ export default function PlayerControls({
     borderRadius: 1.5,
     overflow: 'hidden',
     clipPath: 'inset(0 round 12px)',
-    '&:focus, &:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
+    '&:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
       outline: 'none',
       borderColor: primaryColor,
       bgcolor: alphaColor(primaryColor, 0.72),
@@ -550,17 +601,21 @@ export default function PlayerControls({
     },
   };
   const iconFocusRingSx = {
-    '&:focus, &:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
+    '&:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
       outline: 'none',
       bgcolor: primaryColor,
-      boxShadow: `0 0 0 4px ${alphaColor(primaryColor, 0.4)}`,
+      boxShadow: 'none',
     },
     '&:hover': {
       outline: 'none',
       bgcolor: 'rgba(255,255,255,.14)',
     },
   };
-  const iconButtonSx = { color: '#fff', ...iconFocusRingSx };
+  const iconButtonSx = {
+    color: '#fff',
+    p: isMiniLayout ? 0.5 : isCompactLayout ? 0.75 : 1,
+    ...iconFocusRingSx,
+  };
   const subtitleList = useMemo(
     () => [{ value: '', label: tooltipLabels.noSubtitles }, ...subtitleOptions],
     [subtitleOptions, tooltipLabels.noSubtitles],
@@ -737,14 +792,14 @@ export default function PlayerControls({
   }, [clearHideTimer]);
 
   const openSettings = useCallback(() => {
-    if (!hasTrackSettings) return;
+    if (!showSettingsControl) return;
     clearHideTimer();
     panelClosedByAutoHideRef.current = false;
     setPreferredSettingsFocusKey('');
     setControlsVisible(true);
     setTrackPanelOpen(true);
     setActiveSettingsPanel(null);
-  }, [clearHideTimer, hasTrackSettings]);
+  }, [clearHideTimer, showSettingsControl]);
 
   const closeSettings = useCallback(() => {
     setPreferredSettingsFocusKey('');
@@ -780,11 +835,11 @@ export default function PlayerControls({
   }, [focusedControlTooltip, playing, showControlTooltip, showFocusedTooltips]);
 
   useEffect(() => {
-    if (!trackPanelOpen || hasTrackSettings) return;
+    if (!trackPanelOpen || showSettingsControl) return;
     setPreferredSettingsFocusKey('');
     setActiveSettingsPanel(null);
     setTrackPanelOpen(false);
-  }, [hasTrackSettings, trackPanelOpen]);
+  }, [showSettingsControl, trackPanelOpen]);
 
   useEffect(() => {
     if (activeSettingsPanel === 'audio' && !hasAudioSettings) setActiveSettingsPanel(null);
@@ -877,6 +932,7 @@ export default function PlayerControls({
     <>
       <Box
         ref={controlsRootRef}
+        data-player-layout-density={layoutDensity}
         sx={{
           '--universal-primary-color': primaryColor,
           '--universal-primary-focus-bg': alphaColor(primaryColor, 0.82),
@@ -904,10 +960,10 @@ export default function PlayerControls({
           direction="row"
           alignItems="center"
           justifyContent="space-between"
-          sx={{ position: 'absolute', left: 24, right: 24, top: 18, zIndex: 12, pointerEvents: visible ? 'auto' : 'none' }}
+          sx={{ position: 'absolute', left: topInset, right: topInset, top: topOffset, zIndex: 12, pointerEvents: visible ? 'auto' : 'none' }}
         >
-          <Stack direction="row" alignItems="center" spacing={1}>
-            {onBack && (
+          <Stack direction="row" alignItems="center" spacing={controlSpacing}>
+            {showBackButton && onBack && (
               <ControlTooltip
                 title={tooltipLabels.back}
                 showFocusedTooltip={showFocusedTooltips}
@@ -919,7 +975,7 @@ export default function PlayerControls({
                 </IconButton>
               </ControlTooltip>
             )}
-            {onReload && !isLive && (
+            {showRestartControl && (
               <ControlTooltip
                 title={tooltipLabels.reload}
                 showFocusedTooltip={showFocusedTooltips}
@@ -933,15 +989,15 @@ export default function PlayerControls({
             )}
           </Stack>
 
-          {!isLive && (title || subtitle) && (
+          {showTopMetadata && (
             <Box sx={{ position: 'absolute', left: '22%', right: '22%', top: 4, textAlign: 'center' }}>
               {title && <Typography sx={{ fontSize: { xs: 18, md: 22 }, fontWeight: 800 }}>{title}</Typography>}
               {subtitle && <Typography sx={{ fontSize: { xs: 14, md: 18 }, fontWeight: 700 }}>{subtitle}</Typography>}
             </Box>
           )}
 
-          <Stack direction="row" alignItems="center" spacing={1}>
-            {channelLogo && !isLive && (
+          <Stack direction="row" alignItems="center" spacing={controlSpacing}>
+            {channelLogo && !isLive && !isConstrainedLayout && (
               <Box
                 component="img"
                 src={channelLogo}
@@ -949,7 +1005,7 @@ export default function PlayerControls({
                 sx={{ maxWidth: 86, maxHeight: 46, objectFit: 'contain', filter: 'drop-shadow(0 2px 3px #000)' }}
               />
             )}
-            {hasTrackSettings && (
+            {showSettingsControl && (
               <ControlTooltip
                 title={tooltipLabels.settings}
                 showFocusedTooltip={showFocusedTooltips}
@@ -965,7 +1021,24 @@ export default function PlayerControls({
                 </IconButton>
               </ControlTooltip>
             )}
-            {showPictureInPictureButton && onPictureInPicture && (
+            {showResizeModeControl && (
+              <ControlTooltip
+                title={resizeModeTooltip}
+                showFocusedTooltip={showFocusedTooltips}
+                onShowFocusedTooltip={showControlTooltip}
+                onHideFocusedTooltip={hideControlTooltip}
+              >
+                <IconButton
+                  data-tv-focusable="true"
+                  aria-label={resizeModeTooltip}
+                  onClick={onToggleResizeMode}
+                  sx={iconButtonSx}
+                >
+                  <AspectRatioRoundedIcon fontSize="large" />
+                </IconButton>
+              </ControlTooltip>
+            )}
+            {showPictureInPictureControl && (
               <ControlTooltip
                 title={pictureInPictureTooltip}
                 showFocusedTooltip={showFocusedTooltips}
@@ -985,7 +1058,7 @@ export default function PlayerControls({
                 </IconButton>
               </ControlTooltip>
             )}
-            {showFullscreenButton && onFullscreen && (
+            {showFullscreenControl && (
               <ControlTooltip
                 title={tooltipLabels.fullscreen}
                 showFocusedTooltip={showFocusedTooltips}
@@ -1005,7 +1078,7 @@ export default function PlayerControls({
             direction="row"
             alignItems="center"
             justifyContent="center"
-            spacing={{ xs: 3, md: 7 }}
+            spacing={centerSpacing}
             sx={{
               position: 'absolute',
               top: 0,
@@ -1016,18 +1089,20 @@ export default function PlayerControls({
               pointerEvents: visible ? 'auto' : 'none',
             }}
           >
-            <ControlTooltip
-              title={rewindTooltip}
-              showFocusedTooltip={showFocusedTooltips}
-              onShowFocusedTooltip={showControlTooltip}
-              onHideFocusedTooltip={hideControlTooltip}
-            >
-              <span>
-                <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpBackward} sx={iconButtonSx}>
-                  <RewindIcon sx={{ fontSize: { xs: 46, md: 58 } }} />
-                </IconButton>
-              </span>
-            </ControlTooltip>
+            {showSeekControls && (
+              <ControlTooltip
+                title={rewindTooltip}
+                showFocusedTooltip={showFocusedTooltips}
+                onShowFocusedTooltip={showControlTooltip}
+                onHideFocusedTooltip={hideControlTooltip}
+              >
+                <span>
+                  <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpBackward} sx={iconButtonSx}>
+                    <RewindIcon sx={{ fontSize: seekIconSize }} />
+                  </IconButton>
+                </span>
+              </ControlTooltip>
+            )}
             <ControlTooltip
               title={playPauseTooltip}
               showFocusedTooltip={showFocusedTooltips}
@@ -1036,26 +1111,28 @@ export default function PlayerControls({
             >
               <span>
                 <IconButton ref={playToggleRef} data-tv-focusable="true" disabled={!playable} onClick={onToggle} sx={iconButtonSx}>
-                  {playing ? <PauseRoundedIcon sx={{ fontSize: { xs: 58, md: 76 } }} /> : <PlayArrowRoundedIcon sx={{ fontSize: { xs: 58, md: 76 } }} />}
+                  {playing ? <PauseRoundedIcon sx={{ fontSize: playIconSize }} /> : <PlayArrowRoundedIcon sx={{ fontSize: playIconSize }} />}
                 </IconButton>
               </span>
             </ControlTooltip>
-            <ControlTooltip
-              title={forwardTooltip}
-              showFocusedTooltip={showFocusedTooltips}
-              onShowFocusedTooltip={showControlTooltip}
-              onHideFocusedTooltip={hideControlTooltip}
-            >
-              <span>
-                <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpForward} sx={iconButtonSx}>
-                  <ForwardIcon sx={{ fontSize: { xs: 46, md: 58 } }} />
-                </IconButton>
-              </span>
-            </ControlTooltip>
+            {showSeekControls && (
+              <ControlTooltip
+                title={forwardTooltip}
+                showFocusedTooltip={showFocusedTooltips}
+                onShowFocusedTooltip={showControlTooltip}
+                onHideFocusedTooltip={hideControlTooltip}
+              >
+                <span>
+                  <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpForward} sx={iconButtonSx}>
+                    <ForwardIcon sx={{ fontSize: seekIconSize }} />
+                  </IconButton>
+                </span>
+              </ControlTooltip>
+            )}
           </Stack>
         )}
 
-        {isLive && (liveChannelLabel || channelLogo || liveTitleLabel || liveMetaLabel) && (
+        {showLiveInfoPanel && (
           <Box
             sx={{
               position: 'absolute',
@@ -1176,7 +1253,7 @@ export default function PlayerControls({
           </Box>
         )}
 
-        {!isLive && (channelName || epgTitle) && (
+        {showInlineChannelMeta && (
           <Stack
             direction="row"
             alignItems="center"
@@ -1194,9 +1271,9 @@ export default function PlayerControls({
         )}
 
         {!isLive && (
-        <Box sx={{ position: 'absolute', left: 28, right: 28, bottom: 20, zIndex: 12, pointerEvents: visible ? 'auto' : 'none' }}>
+        <Box sx={{ position: 'absolute', left: progressInset, right: progressInset, bottom: progressBottom, zIndex: 12, pointerEvents: visible ? 'auto' : 'none' }}>
           <Slider
-            data-tv-focusable="true"
+            data-tv-focusable={isMiniLayout ? undefined : 'true'}
             data-player-progress="true"
             aria-label="Barra de progreso"
             min={0}
@@ -1228,9 +1305,10 @@ export default function PlayerControls({
               py: 0,
               '& .MuiSlider-track': { border: 0 },
               '& .MuiSlider-rail': { color: 'rgba(255,255,255,.62)', opacity: 1 },
-              '& .MuiSlider-thumb': { width: 16, height: 16 },
+              '& .MuiSlider-thumb': { width: isMiniLayout ? 10 : 16, height: isMiniLayout ? 10 : 16 },
             }}
           />
+          {!isMiniLayout && (
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.5 }}>
             <Typography sx={{ fontSize: { xs: 16, md: 22 }, fontWeight: 900, fontVariantNumeric: 'tabular-nums' }}>
               {formatTime(displayedTime)}
@@ -1246,6 +1324,7 @@ export default function PlayerControls({
               </Typography>
             </Stack>
           </Stack>
+          )}
         </Box>
         )}
         </Box>
@@ -1297,7 +1376,7 @@ export default function PlayerControls({
                     mr: -0.35,
                     flex: '0 0 auto',
                   },
-                  '&:focus, &:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
+                  '&:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
                     outline: 'none',
                     borderColor: '#fff',
                     background: segmentActionButtonBackground,
@@ -1349,7 +1428,7 @@ export default function PlayerControls({
                     mr: -0.4,
                     flex: '0 0 auto',
                   },
-                  '&:focus, &:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
+                  '&:focus-visible, &.Mui-focusVisible, &[data-tv-focused="true"], &.tv-remote-focused': {
                     outline: 'none',
                     borderColor: '#fff',
                     background: autoContinueButtonBackground,

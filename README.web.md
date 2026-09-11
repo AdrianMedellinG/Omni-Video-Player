@@ -166,6 +166,7 @@ export default function LiveTv() {
 | `startChannelIndex` | `number` | `undefined` | Initial channel with priority. |
 | `channelNavigation` | `boolean` | `true` | Allows channel changes with arrows in fullscreen. |
 | `controls` | `boolean` | `true` | Shows controls. |
+| `showBackButton` | `boolean` | `true` | Shows the Back button when `onBack` is provided. |
 | `overlay` | `object` | `undefined` | Visual metadata and floating actions. |
 | `primaryColor` | `string` | `#e50914` | Primary color. |
 | `locale` | `string` | `en` | `en` or `es`. |
@@ -180,7 +181,7 @@ export default function LiveTv() {
 | `rate` | `number` | `1` | Playback speed. |
 | `repeat` | `boolean` | `false` | Repeats after ending. |
 | `fullscreen` | `boolean` | `false` | Initial fullscreen state. |
-| `pip` | `boolean` | `true` | Enables Picture in Picture when supported. |
+| `pip` | `boolean` | `true` | Enables Picture in Picture when supported by the active engine. In web browsers this uses native `<video>` PiP for MP4/HLS. |
 | `resizeMode` | `contain \| cover \| stretch \| none \| center` | `contain` | Visual fit mode. |
 | `poster` | `string \| object` | `undefined` | Poster image. |
 | `posterResizeMode` | `string` | `contain` | Poster fit mode. |
@@ -195,6 +196,7 @@ export default function LiveTv() {
 | `subtitleFontSize` | `string \| object` | `24px` | Subtitle size. |
 | `subtitleBackgroundColor` | `string` | `rgba(0,0,0,.62)` | Subtitle background. |
 | `renderLoader` | `function \| ReactNode` | `undefined` | Custom loader. |
+| `onBack` | `function` | `undefined` | Back button handler. |
 | `onChannelChange` | `function` | `undefined` | Channel change event. |
 
 ## `source`
@@ -241,6 +243,7 @@ Accepted fields: `uri`, `url`, `type`, `headers`, `userAgent`, `user_agent`, `ht
 | `onTextTrackDataChanged` | `{ subtitleTracks }` |
 | `onBandwidthUpdate` | `{ bitrate, width, height, trackId }` |
 | `onPictureInPictureStatusChanged` | `{ isActive }` |
+| `onResizeModeChange` | `resizeMode` |
 | `onFullscreenPlayerWillPresent` | `undefined` |
 | `onFullscreenPlayerDidPresent` | `undefined` |
 | `onFullscreenPlayerWillDismiss` | `undefined` |
@@ -257,6 +260,7 @@ playerRef.current.play();
 playerRef.current.pause();
 playerRef.current.seekTo(120);
 playerRef.current.jumpBy(10);
+playerRef.current.toggleResizeMode();
 playerRef.current.requestFullscreen();
 ```
 
@@ -276,6 +280,9 @@ playerRef.current.requestFullscreen();
 | `selectSubtitle` | `(trackIdOrIndex) => void` |
 | `requestFullscreen` | `() => Promise<void> \| void` |
 | `requestPictureInPicture` | `() => Promise<void> \| void` |
+| `setResizeMode` | `(resizeMode) => string` |
+| `toggleResizeMode` | `() => string` |
+| `getResizeMode` | `() => string` |
 | `selectChannel` | `(index, reason?) => boolean` |
 | `nextChannel` | `() => boolean` |
 | `previousChannel` | `() => boolean` |

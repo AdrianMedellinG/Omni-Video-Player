@@ -29,8 +29,10 @@ import { getTrackDisplayLabel, getTrackLanguageName } from '../utils/language.js
 import {
   DEFAULT_BUFFER_CONFIG,
   getMergedBufferConfig,
+  getNextResizeMode,
   getPosterSource,
   getStartSeconds,
+  normalizeResizeMode,
   pickTrackBySelection,
   renderLoaderContent,
   resizeModeToObjectFit,
@@ -52,6 +54,7 @@ import PlaybackErrorSnackbar from '../components/PlaybackErrorSnackbar.jsx';
 import { getAvplay, isSamsungTizen, safeJson } from './tizenRuntime.js';
 import { useTvRemote } from './useTvRemote.js';
 import { useSubtitleAppearance } from '../utils/subtitlePreferences.js';
+import { getResponsiveSubtitleStyles, usePlayerLayout } from '../utils/playerLayout.js';
 
 const TIZEN_PROGRESS_SEEK_STEP = 5 * 60;
 
@@ -335,6 +338,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
   onChannelDown,
   channelNavigationEnabled = false,
   controls = true,
+  showBackButton = true,
   overlay,
   primaryColor = '#e50914',
   locale = 'en',
@@ -370,7 +374,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
   progressUpdateInterval = 500,
   renderLoader,
   repeat = false,
-  resizeMode = 'contain',
+  resizeMode: resizeModeProp = 'contain',
   selectedAudioTrack,
   selectedTextTrack,
   selectedVideoTrack,
@@ -395,6 +399,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
   onPlaybackStateChanged,
   onPlaybackRateChange,
   onVolumeChange,
+  onResizeModeChange,
   onAudioTracks,
   onTextTracks,
   onVideoTracks,
@@ -458,6 +463,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
   const [controlsHideSignal, setControlsHideSignal] = useState(0);
   const [settingsBackSignal, setSettingsBackSignal] = useState(0);
+  const [currentResizeMode, setCurrentResizeMode] = useState(() => normalizeResizeMode(resizeModeProp));
   const {
     appearance: subtitleAppearance,
     styles: subtitleStyles,
@@ -467,6 +473,11 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     subtitleFontSize,
     subtitleBackgroundColor,
   });
+  const playerLayout = usePlayerLayout(frameRef);
+  const responsiveSubtitleStyles = useMemo(
+    () => getResponsiveSubtitleStyles(subtitleStyles, playerLayout),
+    [playerLayout, subtitleStyles],
+  );
 
   const clearPrepareTimer = useCallback(() => {
     if (!prepareTimerRef.current) return;
@@ -490,6 +501,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     onPlaybackStateChanged,
     onPlaybackRateChange,
     onVolumeChange,
+    onResizeModeChange,
     onAudioTracks,
     onTextTracks,
     onVideoTracks,
@@ -507,7 +519,7 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     mutedProp,
     volumeProp,
     rateProp,
-    resizeMode,
+    resizeMode: currentResizeMode,
     sourceInfo,
   };
   currentTimeRef.current = currentTime;
@@ -600,6 +612,30 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
       console.warn('No se pudo actualizar setDisplayRect:', displayError);
     }
   }, []);
+
+  useEffect(() => {
+    setCurrentResizeMode(normalizeResizeMode(resizeModeProp));
+  }, [resizeModeProp]);
+
+  useEffect(() => {
+    updateDisplayRect();
+  }, [currentResizeMode, updateDisplayRect]);
+
+  useEffect(() => {
+    updateDisplayRect();
+  }, [playerLayout.height, playerLayout.width, updateDisplayRect]);
+
+  const setResizeMode = useCallback((nextResizeMode) => {
+    const normalizedResizeMode = normalizeResizeMode(nextResizeMode);
+    setCurrentResizeMode(normalizedResizeMode);
+    callbacksRef.current.onResizeModeChange?.(normalizedResizeMode);
+    return normalizedResizeMode;
+  }, []);
+
+  const toggleResizeMode = useCallback(() => {
+    const nextResizeMode = getNextResizeMode(currentResizeMode);
+    return setResizeMode(nextResizeMode);
+  }, [currentResizeMode, setResizeMode]);
 
   const refreshTracks = useCallback(() => {
     const av = avRef.current;
@@ -902,7 +938,11 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     selectAudio,
     selectSubtitle,
     requestFullscreen: toggleFullscreen,
+    setResizeMode,
+    toggleResizeMode,
+    getResizeMode: () => currentResizeMode,
   }), [
+    currentResizeMode,
     duration,
     getCurrentSeconds,
     jumpBy,
@@ -911,9 +951,11 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
     seekTo,
     selectAudio,
     selectSubtitle,
+    setResizeMode,
     stop,
     toggle,
     toggleFullscreen,
+    toggleResizeMode,
   ]);
 
   const retryWithHttpFallback = useCallback((reason) => {
@@ -1590,11 +1632,11 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
                 maxWidth: '100%',
                 px: 1.5,
                 py: 0.6,
-                bgcolor: subtitleStyles.backgroundColor,
-                color: subtitleStyles.color,
-                fontSize: subtitleStyles.fontSize,
+                bgcolor: responsiveSubtitleStyles.backgroundColor,
+                color: responsiveSubtitleStyles.color,
+                fontSize: responsiveSubtitleStyles.fontSize,
                 lineHeight: 1.25,
-                textShadow: subtitleStyles.textShadow,
+                textShadow: responsiveSubtitleStyles.textShadow,
                 whiteSpace: 'pre-wrap',
                 overflowWrap: 'anywhere',
               }}
@@ -1669,6 +1711,8 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
             subtitleOptions={subtitleControlOptions}
             selectedSubtitle={selectedSubtitle}
             subtitleAppearance={subtitleAppearance}
+            playerLayout={playerLayout}
+            resizeMode={currentResizeMode}
             onSubtitleAppearanceChange={updateSubtitleAppearance}
             onReload={() => seekTo(0)}
             onToggle={toggle}
@@ -1679,8 +1723,10 @@ const TizenAvPlayer = forwardRef(function TizenAvPlayer({
             onProgressSeek={(value) => seekTo(value)}
             onSelectAudio={(value) => selectAudio(value)}
             onSelectSubtitle={(value) => selectSubtitle(value)}
+            onToggleResizeMode={toggleResizeMode}
             onFullscreen={toggleFullscreen}
             onBack={onPlayerBack || onBack}
+            showBackButton={showBackButton}
             onVisibilityChange={handleControlsVisibility}
             onSettingsStateChange={handleSettingsStateChange}
             settingsBackSignal={settingsBackSignal}

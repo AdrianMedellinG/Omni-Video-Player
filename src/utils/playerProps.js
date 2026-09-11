@@ -7,6 +7,8 @@ export const DEFAULT_BUFFER_CONFIG = {
   cacheSizeMB: 0,
 };
 
+export const RESIZE_MODE_OPTIONS = ['contain', 'cover', 'stretch', 'center', 'none'];
+
 const USER_AGENT_HEADER_KEYS = new Set(['user-agent', 'useragent']);
 
 function normalizeHeaderEntries(headers = {}) {
@@ -137,11 +139,23 @@ export function getPosterSource(poster, sourceInfo) {
   return value.uri ? value : null;
 }
 
+export function normalizeResizeMode(mode = 'contain') {
+  const value = String(mode || 'contain').trim().toLowerCase();
+  return RESIZE_MODE_OPTIONS.includes(value) ? value : 'contain';
+}
+
+export function getNextResizeMode(mode = 'contain') {
+  const current = normalizeResizeMode(mode);
+  const index = RESIZE_MODE_OPTIONS.indexOf(current);
+  return RESIZE_MODE_OPTIONS[(index + 1) % RESIZE_MODE_OPTIONS.length];
+}
+
 export function resizeModeToObjectFit(mode = 'contain') {
-  if (mode === 'cover') return 'cover';
-  if (mode === 'stretch') return 'fill';
-  if (mode === 'none') return 'none';
-  if (mode === 'center') return 'scale-down';
+  const normalized = normalizeResizeMode(mode);
+  if (normalized === 'cover') return 'cover';
+  if (normalized === 'stretch') return 'fill';
+  if (normalized === 'none') return 'none';
+  if (normalized === 'center') return 'scale-down';
   return 'contain';
 }
 

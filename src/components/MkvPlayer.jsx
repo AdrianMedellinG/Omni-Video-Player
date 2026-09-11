@@ -29,8 +29,10 @@ import { MkvPlayerEngine } from '../engine/MkvPlayerEngine.js';
 import { formatBytes, formatTime, normalizeSeekStep } from '../utils/time.js';
 import { getTrackDisplayLabel, getTrackLanguageName } from '../utils/language.js';
 import {
+  getNextResizeMode,
   getPosterSource,
   getStartSeconds,
+  normalizeResizeMode,
   pickTrackBySelection,
   renderLoaderContent,
   resizeModeToObjectFit,
@@ -48,6 +50,7 @@ import {
   mapVideoTracks,
 } from '../utils/playerEvents.js';
 import { useSubtitleAppearance } from '../utils/subtitlePreferences.js';
+import { getResponsiveSubtitleStyles, usePlayerLayout } from '../utils/playerLayout.js';
 import { normalizeRetryCount, normalizeRetryDelay } from '../utils/errorMessages.js';
 import { useElectronPip } from '../platform/useElectronPip.js';
 import PlayerControls from './PlayerControls.jsx';
@@ -105,6 +108,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   src,
   sourceInfo,
   controls = true,
+  showBackButton = true,
   overlay,
   primaryColor = '#e50914',
   locale = 'en',
@@ -126,7 +130,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   posterResizeMode = 'contain',
   renderLoader,
   repeat = false,
-  resizeMode = 'contain',
+  resizeMode: resizeModeProp = 'contain',
   selectedAudioTrack,
   selectedTextTrack,
   progressUpdateInterval = 250,
@@ -137,6 +141,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   subtitleFontSize = { xs: '1rem', sm: '1.25rem', md: '1.55rem', lg: '1.75rem' },
   subtitleBackgroundColor = 'rgba(0,0,0,.62)',
   onReady,
+  onBack,
   onProgress,
   onPlay,
   onPause,
@@ -151,6 +156,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   onPlaybackStateChanged,
   onPlaybackRateChange,
   onVolumeChange,
+  onResizeModeChange,
   onAudioTracks,
   onTextTracks,
   onVideoTracks,
@@ -189,6 +195,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   const [bytesRead, setBytesRead] = useState(0);
   const [scrubValue, setScrubValue] = useState(null);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [currentResizeMode, setCurrentResizeMode] = useState(() => normalizeResizeMode(resizeModeProp));
   const {
     appearance: subtitleAppearance,
     styles: subtitleStyles,
@@ -198,6 +205,11 @@ const MkvPlayer = forwardRef(function MkvPlayer({
     subtitleFontSize,
     subtitleBackgroundColor,
   });
+  const playerLayout = usePlayerLayout(wrapperRef);
+  const responsiveSubtitleStyles = useMemo(
+    () => getResponsiveSubtitleStyles(subtitleStyles, playerLayout),
+    [playerLayout, subtitleStyles],
+  );
 
   callbacksRef.current = {
     onReady,
@@ -215,6 +227,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
     onPlaybackStateChanged,
     onPlaybackRateChange,
     onVolumeChange,
+    onResizeModeChange,
     onAudioTracks,
     onTextTracks,
     onVideoTracks,
@@ -231,7 +244,7 @@ const MkvPlayer = forwardRef(function MkvPlayer({
   };
   const posterInfo = useMemo(() => getPosterSource(poster, sourceInfo), [poster, sourceInfo]);
   const posterFit = resizeModeToObjectFit(posterInfo?.resizeMode || posterResizeMode);
-  const canvasFit = resizeModeToObjectFit(resizeMode);
+  const canvasFit = resizeModeToObjectFit(currentResizeMode);
   const hasCustomLoader = Boolean(renderLoader);
   const requestHeaders = useMemo(() => sanitizeRequestHeaders(headers), [headers]);
   const {
@@ -272,6 +285,22 @@ const MkvPlayer = forwardRef(function MkvPlayer({
     else await wrapperRef.current.requestFullscreen();
   }, []);
 
+  useEffect(() => {
+    setCurrentResizeMode(normalizeResizeMode(resizeModeProp));
+  }, [resizeModeProp]);
+
+  const setResizeMode = useCallback((nextResizeMode) => {
+    const normalizedResizeMode = normalizeResizeMode(nextResizeMode);
+    setCurrentResizeMode(normalizedResizeMode);
+    callbacksRef.current.onResizeModeChange?.(normalizedResizeMode);
+    return normalizedResizeMode;
+  }, []);
+
+  const toggleResizeMode = useCallback(() => {
+    const nextResizeMode = getNextResizeMode(currentResizeMode);
+    return setResizeMode(nextResizeMode);
+  }, [currentResizeMode, setResizeMode]);
+
   useImperativeHandle(ref, () => ({
     play: () => engineRef.current?.play(),
     pause: () => engineRef.current?.pause(),
@@ -287,7 +316,20 @@ const MkvPlayer = forwardRef(function MkvPlayer({
     selectSubtitle: (id) => engineRef.current?.setSubtitleTrack(id),
     requestFullscreen: toggleFullscreen,
     requestPictureInPicture: togglePictureInPicture,
-  }), [currentTime, duration, jumpBy, seekTo, togglePictureInPicture, toggleFullscreen]);
+    setResizeMode,
+    toggleResizeMode,
+    getResizeMode: () => currentResizeMode,
+  }), [
+    currentResizeMode,
+    currentTime,
+    duration,
+    jumpBy,
+    seekTo,
+    setResizeMode,
+    togglePictureInPicture,
+    toggleFullscreen,
+    toggleResizeMode,
+  ]);
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -656,12 +698,12 @@ const MkvPlayer = forwardRef(function MkvPlayer({
                 maxWidth: '100%',
                 px: 1.1,
                 py: 0.35,
-                fontSize: subtitleStyles.fontSize,
+                fontSize: responsiveSubtitleStyles.fontSize,
                 fontWeight: 600,
                 lineHeight: 1.3,
-                color: subtitleStyles.color,
-                background: subtitleStyles.backgroundColor,
-                textShadow: subtitleStyles.textShadow,
+                color: responsiveSubtitleStyles.color,
+                background: responsiveSubtitleStyles.backgroundColor,
+                textShadow: responsiveSubtitleStyles.textShadow,
                 borderRadius: 0.6,
                 whiteSpace: 'pre-line',
                 wordBreak: 'break-word',
@@ -715,6 +757,8 @@ const MkvPlayer = forwardRef(function MkvPlayer({
             subtitleOptions={subtitleControlOptions}
             selectedSubtitle={selectedSubtitle}
             subtitleAppearance={subtitleAppearance}
+            playerLayout={playerLayout}
+            resizeMode={currentResizeMode}
             onSubtitleAppearanceChange={updateSubtitleAppearance}
             onSettingsStateChange={handleSettingsStateChange}
             onReload={() => seekTo(0)}
@@ -733,9 +777,12 @@ const MkvPlayer = forwardRef(function MkvPlayer({
                 ?.setSubtitleTrack(value)
                 .catch((err) => setError(err.message));
             }}
+            onToggleResizeMode={toggleResizeMode}
             onFullscreen={toggleFullscreen}
             onPictureInPicture={pictureInPictureSupported ? togglePictureInPicture : undefined}
             pictureInPictureActive={pictureInPictureActive}
+            onBack={onBack}
+            showBackButton={showBackButton}
             showPictureInPictureButton={pip !== false}
           />
         )}

@@ -5,6 +5,12 @@ function getElectronApi() {
   return window.electronAPI || null;
 }
 
+async function exitDocumentFullscreen() {
+  if (typeof document === 'undefined') return;
+  if (!document.fullscreenElement || typeof document.exitFullscreen !== 'function') return;
+  await document.exitFullscreen().catch(() => {});
+}
+
 export function useElectronPip(enabled = true) {
   const [active, setActiveState] = useState(false);
   const [supported, setSupported] = useState(false);
@@ -36,17 +42,19 @@ export function useElectronPip(enabled = true) {
     };
   }, [enabled]);
 
-  const setActive = useCallback((value) => {
+  const setActive = useCallback(async (value) => {
     const api = getElectronApi();
     if (!enabled || !api?.setPipMode) return Promise.resolve({ active: false, supported: false });
+    if (value) await exitDocumentFullscreen();
     return api.setPipMode(Boolean(value));
   }, [enabled]);
 
-  const toggle = useCallback(() => {
+  const toggle = useCallback(async () => {
     const api = getElectronApi();
     if (!enabled || !api?.togglePipMode) return Promise.resolve({ active: false, supported: false });
+    if (!active) await exitDocumentFullscreen();
     return api.togglePipMode();
-  }, [enabled]);
+  }, [active, enabled]);
 
   return { active, supported, setActive, toggle };
 }

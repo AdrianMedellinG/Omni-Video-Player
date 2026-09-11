@@ -95,6 +95,7 @@ export default function App() {
   const [userAgent, setUserAgent] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
   const [controls, setControls] = useState(true);
+  const [showBackButton, setShowBackButton] = useState(true);
   const [pip, setPip] = useState(true);
   const [locale, setLocale] = useState('en');
   const [controlsAutoHideDelay, setControlsAutoHideDelay] = useState(5000);
@@ -574,6 +575,7 @@ export default function App() {
                 ref={playerRef}
                 source={source}
                 controls={controls}
+                showBackButton={showBackButton}
                 locale={locale}
                 controlsAutoHideDelay={controlsAutoHideDelay}
                 primaryColor={primaryColor}
@@ -647,6 +649,10 @@ export default function App() {
                 onVolumeChange={(event) => {
                   pushLog(setLogs, `onVolumeChange: ${event.volume.toFixed?.(2) ?? event.volume} muted=${event.muted}`);
                 }}
+                onResizeModeChange={(nextResizeMode) => {
+                  setResizeMode(nextResizeMode);
+                  pushLog(setLogs, `onResizeModeChange: ${nextResizeMode}`);
+                }}
                 onAudioTracks={(event) => {
                   pushLog(setLogs, `onAudioTracks: ${event.audioTracks?.length || 0}`);
                 }}
@@ -664,6 +670,7 @@ export default function App() {
                 onFullscreenPlayerDidPresent={() => pushLog(setLogs, 'onFullscreenPlayerDidPresent')}
                 onFullscreenPlayerWillDismiss={() => pushLog(setLogs, 'onFullscreenPlayerWillDismiss')}
                 onFullscreenPlayerDidDismiss={() => pushLog(setLogs, 'onFullscreenPlayerDidDismiss')}
+                onBack={handleBack}
               />
             ) : (
               <Alert severity="info">
@@ -730,6 +737,7 @@ export default function App() {
 
                 <Stack spacing={1}>
                   <FormControlLabel control={<Checkbox checked={controls} onChange={(event) => setControls(event.target.checked)} />} label="controls" />
+                  <FormControlLabel control={<Checkbox checked={showBackButton} onChange={(event) => setShowBackButton(event.target.checked)} />} label="showBackButton" />
                   <FormControlLabel control={<Checkbox checked={pip} onChange={(event) => setPip(event.target.checked)} />} label="pip" />
                   <FormControlLabel control={<Checkbox checked={paused} onChange={(event) => setPaused(event.target.checked)} />} label="paused" />
                   <FormControlLabel control={<Checkbox checked={autoPlay} onChange={(event) => setAutoPlay(event.target.checked)} />} label="autoPlay" />

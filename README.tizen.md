@@ -304,6 +304,7 @@ Rules:
 | `startChannelIndex` | `number` | `undefined` | Initial channel with priority. |
 | `channelNavigation` | `boolean` | `true` | Channel changes with remote/arrows. |
 | `controls` | `boolean` | `true` | Shows controls. |
+| `showBackButton` | `boolean` | `true` | Shows the Back button when `onBack` is provided. |
 | `overlay` | `object` | `undefined` | Metadata, EPG, and floating actions. |
 | `primaryColor` | `string` | `#e50914` | Primary color. |
 | `locale` | `string` | `en` | `en` or `es`. |
@@ -402,6 +403,7 @@ Rules:
 | `onTextTracks` | `{ textTracks }` |
 | `onVideoTracks` | `{ videoTracks }` |
 | `onTextTrackDataChanged` | `{ subtitleTracks }` |
+| `onResizeModeChange` | `resizeMode` |
 | `onFullscreenPlayerWillPresent` | `undefined` |
 | `onFullscreenPlayerDidPresent` | `undefined` |
 | `onFullscreenPlayerWillDismiss` | `undefined` |
@@ -418,6 +420,7 @@ playerRef.current.play();
 playerRef.current.pause();
 playerRef.current.seekTo(120);
 playerRef.current.jumpBy(10);
+playerRef.current.toggleResizeMode();
 ```
 
 | Method | Signature |
@@ -435,6 +438,9 @@ playerRef.current.jumpBy(10);
 | `selectAudio` | `(trackIndex) => void` |
 | `selectSubtitle` | `(trackIndex) => void` |
 | `requestFullscreen` | `() => void` |
+| `setResizeMode` | `(resizeMode) => string` |
+| `toggleResizeMode` | `() => string` |
+| `getResizeMode` | `() => string` |
 | `selectChannel` | `(index, reason?) => boolean` |
 | `nextChannel` | `() => boolean` |
 | `previousChannel` | `() => boolean` |

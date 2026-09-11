@@ -37,6 +37,7 @@ export default function WebOsPlayer() {
       fullscreen
       autoPlay
       controls
+      showBackButton={false}
     />
   );
 }
@@ -103,4 +104,4 @@ Final support depends on the webOS version, browser engine, firmware, and availa
 - Prefer HTTPS streams.
 - Use servers that support `Accept-Ranges: bytes` for large VOD files.
 - Test on the target TV model or emulator; desktop browser behavior is not a full webOS compatibility test.
-- For shared props, events, and ref methods, see the [Web README](README.web.md).
+- `showBackButton` defaults to `true` and controls only the visible Back button. For shared props, events, and ref methods, see the [Web README](README.web.md).

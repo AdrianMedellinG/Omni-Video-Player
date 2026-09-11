@@ -28,8 +28,10 @@ import { normalizeRetryCount, normalizeRetryDelay } from '../utils/errorMessages
 import { getTrackDisplayLabel, getTrackLanguageName } from '../utils/language.js';
 import {
   getMergedBufferConfig,
+  getNextResizeMode,
   getPosterSource,
   getStartSeconds,
+  normalizeResizeMode,
   pickTrackBySelection,
   renderLoaderContent,
   resizeModeToObjectFit,
@@ -48,6 +50,7 @@ import {
   mapVideoTracks,
 } from '../utils/playerEvents.js';
 import { useSubtitleAppearance } from '../utils/subtitlePreferences.js';
+import { getResponsiveSubtitleStyles, usePlayerLayout } from '../utils/playerLayout.js';
 import { useElectronPip } from '../platform/useElectronPip.js';
 import PlayerControls from './PlayerControls.jsx';
 import PlaybackErrorSnackbar from './PlaybackErrorSnackbar.jsx';
@@ -59,6 +62,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   sourceInfo,
   mode = 'native',
   controls = true,
+  showBackButton = true,
   overlay,
   primaryColor = '#e50914',
   locale = 'en',
@@ -93,7 +97,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   progressUpdateInterval = 250,
   renderLoader,
   repeat = false,
-  resizeMode = 'contain',
+  resizeMode: resizeModeProp = 'contain',
   selectedAudioTrack,
   selectedTextTrack,
   selectedVideoTrack,
@@ -104,6 +108,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   subtitleFontSize = '24px',
   subtitleBackgroundColor = 'rgba(0,0,0,.62)',
   onReady,
+  onBack,
   onProgress,
   onPlay,
   onPause,
@@ -118,6 +123,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   onPlaybackStateChanged,
   onPlaybackRateChange,
   onVolumeChange,
+  onResizeModeChange,
   onAudioTracks,
   onTextTracks,
   onVideoTracks,
@@ -157,6 +163,9 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   const [selectedLevel, setSelectedLevel] = useState(-1);
   const [scrubValue, setScrubValue] = useState(null);
   const [fallbackToMediabunny, setFallbackToMediabunny] = useState(false);
+  const [nativePictureInPictureActive, setNativePictureInPictureActive] = useState(false);
+  const [nativePictureInPictureSupported, setNativePictureInPictureSupported] = useState(false);
+  const [currentResizeMode, setCurrentResizeMode] = useState(() => normalizeResizeMode(resizeModeProp));
   const {
     appearance: subtitleAppearance,
     styles: subtitleStyles,
@@ -166,6 +175,11 @@ const StandardPlayer = forwardRef(function StandardPlayer({
     subtitleFontSize,
     subtitleBackgroundColor,
   });
+  const playerLayout = usePlayerLayout(wrapperRef);
+  const responsiveSubtitleStyles = useMemo(
+    () => getResponsiveSubtitleStyles(subtitleStyles, playerLayout),
+    [playerLayout, subtitleStyles],
+  );
 
   callbacksRef.current = {
     onReady,
@@ -183,6 +197,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
     onPlaybackStateChanged,
     onPlaybackRateChange,
     onVolumeChange,
+    onResizeModeChange,
     onAudioTracks,
     onTextTracks,
     onVideoTracks,
@@ -199,14 +214,16 @@ const StandardPlayer = forwardRef(function StandardPlayer({
   );
   const posterInfo = useMemo(() => getPosterSource(poster, sourceInfo), [poster, sourceInfo]);
   const posterFit = resizeModeToObjectFit(posterInfo?.resizeMode || posterResizeMode);
-  const videoFit = resizeModeToObjectFit(resizeMode);
+  const videoFit = resizeModeToObjectFit(currentResizeMode);
   const hasCustomLoader = Boolean(renderLoader);
   const requestHeaders = useMemo(() => sanitizeRequestHeaders(headers), [headers]);
   const {
-    active: pictureInPictureActive,
-    supported: pictureInPictureSupported,
-    toggle: togglePictureInPicture,
+    active: electronPictureInPictureActive,
+    supported: electronPictureInPictureSupported,
+    toggle: toggleElectronPictureInPicture,
   } = useElectronPip(pip !== false);
+  const pictureInPictureActive = electronPictureInPictureActive || nativePictureInPictureActive;
+  const pictureInPictureSupported = electronPictureInPictureSupported || nativePictureInPictureSupported;
 
   const getTarget = useCallback((seconds) => {
     const video = videoRef.current;
@@ -263,6 +280,66 @@ const StandardPlayer = forwardRef(function StandardPlayer({
       }
     }
   }, [fullscreenAutorotate, fullscreenOrientation]);
+
+  useEffect(() => {
+    setCurrentResizeMode(normalizeResizeMode(resizeModeProp));
+  }, [resizeModeProp]);
+
+  const setResizeMode = useCallback((nextResizeMode) => {
+    const normalizedResizeMode = normalizeResizeMode(nextResizeMode);
+    setCurrentResizeMode(normalizedResizeMode);
+    callbacksRef.current.onResizeModeChange?.(normalizedResizeMode);
+    return normalizedResizeMode;
+  }, []);
+
+  const toggleResizeMode = useCallback(() => {
+    const nextResizeMode = getNextResizeMode(currentResizeMode);
+    return setResizeMode(nextResizeMode);
+  }, [currentResizeMode, setResizeMode]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const supported = Boolean(
+      pip !== false
+      && typeof document !== 'undefined'
+      && document.pictureInPictureEnabled
+      && typeof video?.requestPictureInPicture === 'function',
+    );
+
+    setNativePictureInPictureSupported(supported);
+    if (!supported) setNativePictureInPictureActive(false);
+  }, [pip, src]);
+
+  const toggleNativePictureInPicture = useCallback(async () => {
+    const video = videoRef.current;
+    const supported = Boolean(
+      pip !== false
+      && typeof document !== 'undefined'
+      && document.pictureInPictureEnabled
+      && typeof video?.requestPictureInPicture === 'function',
+    );
+
+    if (!supported) return { active: false, supported: false };
+
+    if (document.pictureInPictureElement === video) {
+      await document.exitPictureInPicture?.();
+      setNativePictureInPictureActive(false);
+      return { active: false, supported: true };
+    }
+
+    await video.requestPictureInPicture();
+    setNativePictureInPictureActive(true);
+    return { active: true, supported: true };
+  }, [pip]);
+
+  const togglePictureInPicture = useCallback(() => {
+    if (electronPictureInPictureSupported) return toggleElectronPictureInPicture();
+    return toggleNativePictureInPicture();
+  }, [
+    electronPictureInPictureSupported,
+    toggleElectronPictureInPicture,
+    toggleNativePictureInPicture,
+  ]);
 
   const syncNativeAudioTracks = () => {
     const video = videoRef.current;
@@ -540,8 +617,14 @@ const StandardPlayer = forwardRef(function StandardPlayer({
       emitPlayerEvent(callbacksRef, 'onSeek', createSeekPayload(video.currentTime || 0, seekTime));
       emitPlayerEvent(callbacksRef, 'onPlaybackStateChanged', createPlaybackStatePayload({ isPlaying: !video.paused, isSeeking: false }));
     };
-    const onEnterPictureInPicture = () => emitPlayerEvent(callbacksRef, 'onPictureInPictureStatusChanged', { isActive: true });
-    const onLeavePictureInPicture = () => emitPlayerEvent(callbacksRef, 'onPictureInPictureStatusChanged', { isActive: false });
+    const onEnterPictureInPicture = () => {
+      setNativePictureInPictureActive(true);
+      emitPlayerEvent(callbacksRef, 'onPictureInPictureStatusChanged', { isActive: true });
+    };
+    const onLeavePictureInPicture = () => {
+      setNativePictureInPictureActive(false);
+      emitPlayerEvent(callbacksRef, 'onPictureInPictureStatusChanged', { isActive: false });
+    };
 
     video.addEventListener('loadedmetadata', onLoaded);
     video.addEventListener('loadeddata', onLoadedData);
@@ -794,16 +877,22 @@ const StandardPlayer = forwardRef(function StandardPlayer({
     selectSubtitle,
     requestFullscreen: toggleFullscreen,
     requestPictureInPicture: togglePictureInPicture,
+    setResizeMode,
+    toggleResizeMode,
+    getResizeMode: () => currentResizeMode,
   }), [
+    currentResizeMode,
     currentTime,
     duration,
     jumpBy,
     pause,
     play,
     seekTo,
+    setResizeMode,
     togglePictureInPicture,
     toggleFullscreen,
     togglePlay,
+    toggleResizeMode,
   ]);
 
   if (mode === 'native' && fallbackToMediabunny) {
@@ -825,13 +914,14 @@ const StandardPlayer = forwardRef(function StandardPlayer({
           volume={volumeProp}
           rate={rateProp}
           repeat={repeat}
-          resizeMode={resizeMode}
+          resizeMode={currentResizeMode}
           poster={poster}
           posterResizeMode={posterResizeMode}
           renderLoader={renderLoader}
           selectedAudioTrack={selectedAudioTrack}
           selectedTextTrack={selectedTextTrack}
           controls={controls}
+          showBackButton={showBackButton}
           overlay={overlay}
           primaryColor={primaryColor}
           locale={locale}
@@ -843,6 +933,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
           subtitleFontSize={subtitleFontSize}
           subtitleBackgroundColor={subtitleBackgroundColor}
           onReady={onReady}
+          onBack={onBack}
           onProgress={onProgress}
           onPlay={onPlay}
           onPause={onPause}
@@ -857,6 +948,7 @@ const StandardPlayer = forwardRef(function StandardPlayer({
           onPlaybackStateChanged={onPlaybackStateChanged}
           onPlaybackRateChange={onPlaybackRateChange}
           onVolumeChange={onVolumeChange}
+          onResizeModeChange={onResizeModeChange}
           onAudioTracks={onAudioTracks}
           onTextTracks={onTextTracks}
           onVideoTracks={onVideoTracks}
@@ -879,10 +971,10 @@ const StandardPlayer = forwardRef(function StandardPlayer({
             objectFit: videoFit,
             display: 'block',
             background: '#000',
-            '--universal-subtitle-color': subtitleStyles.color,
-            '--universal-subtitle-font-size': subtitleStyles.fontSize,
-            '--universal-subtitle-bg': subtitleStyles.backgroundColor,
-            '--universal-subtitle-shadow': subtitleStyles.textShadow,
+            '--universal-subtitle-color': responsiveSubtitleStyles.color,
+            '--universal-subtitle-font-size': responsiveSubtitleStyles.fontSize,
+            '--universal-subtitle-bg': responsiveSubtitleStyles.backgroundColor,
+            '--universal-subtitle-shadow': responsiveSubtitleStyles.textShadow,
           }}
         />
 
@@ -940,6 +1032,8 @@ const StandardPlayer = forwardRef(function StandardPlayer({
             subtitleOptions={subtitleControlOptions}
             selectedSubtitle={selectedSubtitle === -1 ? '' : selectedSubtitle}
             subtitleAppearance={subtitleAppearance}
+            playerLayout={playerLayout}
+            resizeMode={currentResizeMode}
             onSubtitleAppearanceChange={updateSubtitleAppearance}
             onReload={() => seekTo(0)}
             onToggle={togglePlay}
@@ -948,9 +1042,12 @@ const StandardPlayer = forwardRef(function StandardPlayer({
             onSeek={(value) => seekTo(value)}
             onSelectAudio={(value) => selectAudio(value)}
             onSelectSubtitle={(value) => selectSubtitle(value === '' ? -1 : value)}
+            onToggleResizeMode={toggleResizeMode}
             onFullscreen={toggleFullscreen}
             onPictureInPicture={pictureInPictureSupported ? togglePictureInPicture : undefined}
             pictureInPictureActive={pictureInPictureActive}
+            onBack={onBack}
+            showBackButton={showBackButton}
             showPictureInPictureButton={pip !== false}
           />
         )}

@@ -311,6 +311,7 @@ Final support depends on the Chromium/Electron version and the available codecs.
 | `startChannelIndex` | `number` | `undefined` | Initial channel with priority. |
 | `channelNavigation` | `boolean` | `true` | Channel changes with arrows in fullscreen. |
 | `controls` | `boolean` | `true` | Shows controls. |
+| `showBackButton` | `boolean` | `true` | Shows the Back button when `onBack` is provided. |
 | `overlay` | `object` | `undefined` | Metadata, EPG, and floating actions. |
 | `primaryColor` | `string` | `#e50914` | Primary color. |
 | `locale` | `string` | `en` | `en` or `es`. |
@@ -344,6 +345,7 @@ Final support depends on the Chromium/Electron version and the available codecs.
 | `subtitleFontSize` | `string \| object` | `24px` | Subtitle size. |
 | `subtitleBackgroundColor` | `string` | `rgba(0,0,0,.62)` | Subtitle background. |
 | `renderLoader` | `function \| ReactNode` | `undefined` | Custom loader. |
+| `onBack` | `function` | `undefined` | Back button handler. |
 | `onChannelChange` | `function` | `undefined` | Channel change event. |
 
 ## `source`
@@ -401,6 +403,7 @@ Times can be provided in milliseconds (`start_ms`, `end_ms`) or seconds (`start_
 | `onTextTrackDataChanged` | `{ subtitleTracks }` |
 | `onBandwidthUpdate` | `{ bitrate, width, height, trackId }` |
 | `onPictureInPictureStatusChanged` | `{ isActive }` |
+| `onResizeModeChange` | `resizeMode` |
 | `onFullscreenPlayerWillPresent` | `undefined` |
 | `onFullscreenPlayerDidPresent` | `undefined` |
 | `onFullscreenPlayerWillDismiss` | `undefined` |
@@ -416,6 +419,7 @@ const playerRef = useRef(null);
 playerRef.current.play();
 playerRef.current.pause();
 playerRef.current.seekTo(120);
+playerRef.current.toggleResizeMode();
 playerRef.current.requestPictureInPicture();
 ```
 
@@ -435,6 +439,9 @@ playerRef.current.requestPictureInPicture();
 | `selectSubtitle` | `(trackIdOrIndex) => void` |
 | `requestFullscreen` | `() => Promise<void> \| void` |
 | `requestPictureInPicture` | `() => Promise<object> \| void` |
+| `setResizeMode` | `(resizeMode) => string` |
+| `toggleResizeMode` | `() => string` |
+| `getResizeMode` | `() => string` |
 | `selectChannel` | `(index, reason?) => boolean` |
 | `nextChannel` | `() => boolean` |
 | `previousChannel` | `() => boolean` |

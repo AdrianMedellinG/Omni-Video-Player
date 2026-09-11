@@ -340,6 +340,7 @@ export default function TizenApp() {
           autoPlay
           paused={false}
           fullscreen
+          showBackButton
           controlsAutoHideDelay={3500}
           onLoad={handleLoad}
           onProgress={handleProgress}

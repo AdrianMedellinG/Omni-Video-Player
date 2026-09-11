@@ -34,7 +34,25 @@ function emitPipState() {
   });
 }
 
-function enterPipMode() {
+function waitForWindowEvent(win, eventName, timeoutMs = 900) {
+  return new Promise((resolve) => {
+    if (!win || win.isDestroyed()) {
+      resolve();
+      return;
+    }
+
+    const timeout = setTimeout(done, timeoutMs);
+    function done() {
+      clearTimeout(timeout);
+      win.off(eventName, done);
+      resolve();
+    }
+
+    win.once(eventName, done);
+  });
+}
+
+async function enterPipMode() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return { active: false, supported: false };
   if (pipState.active) return { active: true, supported: true };
@@ -46,8 +64,16 @@ function enterPipMode() {
     minimumSize: win.getMinimumSize(),
   };
 
-  if (pipState.restore.isFullScreen) win.setFullScreen(false);
-  if (pipState.restore.isMaximized) win.unmaximize();
+  if (pipState.restore.isFullScreen) {
+    const leaveFullScreen = waitForWindowEvent(win, 'leave-full-screen');
+    win.setFullScreen(false);
+    await leaveFullScreen;
+  }
+  if (pipState.restore.isMaximized) {
+    const unmaximize = waitForWindowEvent(win, 'unmaximize', 500);
+    win.unmaximize();
+    await unmaximize;
+  }
 
   win.setMinimumSize(...PIP_MIN_SIZE);
   win.setAspectRatio(PIP_ASPECT_RATIO);
@@ -60,7 +86,7 @@ function enterPipMode() {
   return { active: true, supported: true };
 }
 
-function exitPipMode() {
+async function exitPipMode() {
   const win = mainWindow;
   if (!win || win.isDestroyed()) return { active: false, supported: false };
   if (!pipState.active) return { active: false, supported: true };
