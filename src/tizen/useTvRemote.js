@@ -134,6 +134,11 @@ function focusElement(element) {
   markRemoteFocus(element);
 }
 
+function isTvSeekControlFocused() {
+  return (isSamsungTizen() || isWebOS())
+    && Boolean(document.activeElement?.getAttribute('data-tv-seek-direction'));
+}
+
 function handleRemoteKey(name, event, handlers) {
   if (name === 'ArrowLeft') {
     event.preventDefault();
@@ -146,13 +151,13 @@ function handleRemoteKey(name, event, handlers) {
     return true;
   }
   if (name === 'ArrowUp') {
-    if (handleChannelKey('up', event, handlers)) return true;
+    if (!isTvSeekControlFocused() && handleChannelKey('up', event, handlers)) return true;
     event.preventDefault();
     moveFocus('up');
     return true;
   }
   if (name === 'ArrowDown') {
-    if (handleChannelKey('down', event, handlers)) return true;
+    if (!isTvSeekControlFocused() && handleChannelKey('down', event, handlers)) return true;
     event.preventDefault();
     moveFocus('down');
     return true;
@@ -235,6 +240,18 @@ function moveFocus(direction) {
 
   if (!currentRect || !items.includes(current)) {
     focusElement(items[0]);
+    return;
+  }
+
+  const seekDirection = current.getAttribute('data-tv-seek-direction');
+  if ((isSamsungTizen() || isWebOS()) && seekDirection && (direction === 'left' || direction === 'right')) {
+    const towardPlayPause = (seekDirection === 'backward' && direction === 'right')
+      || (seekDirection === 'forward' && direction === 'left');
+    if (towardPlayPause) {
+      const playPause = current.closest('[data-player-center-controls="true"]')
+        ?.querySelector('[data-tv-play-pause="true"]');
+      if (items.includes(playPause)) focusElement(playPause);
+    }
     return;
   }
 

@@ -495,6 +495,7 @@ export default function PlayerControls({
   const keyboardSeekTimerRef = useRef(null);
   const keyboardSeekValueRef = useRef(null);
   const onProgressSeekRef = useRef(onProgressSeek);
+  const backButtonRef = useRef(null);
   const playToggleRef = useRef(null);
   const autoContinueButtonRef = useRef(null);
   const segmentActionButtonRef = useRef(null);
@@ -689,6 +690,12 @@ export default function PlayerControls({
     trackPanelOpenRef.current = trackPanelOpen;
   }, [trackPanelOpen]);
 
+  const focusBackButton = useCallback(() => {
+    const button = backButtonRef.current;
+    if (!button || button.disabled) return;
+    button.focus();
+  }, []);
+
   const focusPlayToggle = useCallback(() => {
     const button = playToggleRef.current;
     if (!button || button.disabled) return;
@@ -874,10 +881,13 @@ export default function PlayerControls({
         firstSummary?.focus();
         return;
       }
-      if (controlsVisible && !shouldShowOverlayAction) focusPlayToggle();
+      if (controlsVisible && !shouldShowOverlayAction) {
+        if (isLive) focusBackButton();
+        else focusPlayToggle();
+      }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [activeSettingsPanel, controlsVisible, focusPlayToggle, playable, shouldShowOverlayAction, trackPanelOpen]);
+  }, [activeSettingsPanel, controlsVisible, focusBackButton, focusPlayToggle, isLive, playable, shouldShowOverlayAction, trackPanelOpen]);
 
   useEffect(() => {
     if (!trackPanelOpen || !activeSettingsPanel) return undefined;
@@ -972,7 +982,7 @@ export default function PlayerControls({
                 onShowFocusedTooltip={showControlTooltip}
                 onHideFocusedTooltip={hideControlTooltip}
               >
-                <IconButton data-tv-focusable="true" onClick={onBack} sx={iconButtonSx}>
+                <IconButton ref={backButtonRef} data-tv-focusable="true" onClick={onBack} sx={iconButtonSx}>
                   <ArrowBackRoundedIcon fontSize="large" />
                 </IconButton>
               </ControlTooltip>
@@ -1077,6 +1087,7 @@ export default function PlayerControls({
 
         {!isLive && (
           <Stack
+            data-player-center-controls="true"
             direction="row"
             alignItems="center"
             justifyContent="center"
@@ -1099,7 +1110,7 @@ export default function PlayerControls({
                 onHideFocusedTooltip={hideControlTooltip}
               >
                 <span>
-                  <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpBackward} sx={iconButtonSx}>
+                  <IconButton data-tv-focusable="true" data-tv-seek-direction="backward" disabled={!playable} onClick={onJumpBackward} sx={iconButtonSx}>
                     <RewindIcon sx={{ fontSize: seekIconSize }} />
                   </IconButton>
                 </span>
@@ -1112,7 +1123,7 @@ export default function PlayerControls({
               onHideFocusedTooltip={hideControlTooltip}
             >
               <span>
-                <IconButton ref={playToggleRef} data-tv-focusable="true" disabled={!playable} onClick={onToggle} sx={iconButtonSx}>
+                <IconButton ref={playToggleRef} data-tv-focusable="true" data-tv-play-pause="true" disabled={!playable} onClick={onToggle} sx={iconButtonSx}>
                   {playing ? <PauseRoundedIcon sx={{ fontSize: playIconSize }} /> : <PlayArrowRoundedIcon sx={{ fontSize: playIconSize }} />}
                 </IconButton>
               </span>
@@ -1125,7 +1136,7 @@ export default function PlayerControls({
                 onHideFocusedTooltip={hideControlTooltip}
               >
                 <span>
-                  <IconButton data-tv-focusable="true" disabled={!playable} onClick={onJumpForward} sx={iconButtonSx}>
+                  <IconButton data-tv-focusable="true" data-tv-seek-direction="forward" disabled={!playable} onClick={onJumpForward} sx={iconButtonSx}>
                     <ForwardIcon sx={{ fontSize: seekIconSize }} />
                   </IconButton>
                 </span>
