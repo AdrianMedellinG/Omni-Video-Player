@@ -944,6 +944,7 @@ export default function PlayerControls({
     <>
       <Box
         ref={controlsRootRef}
+        data-player-controls-root="true"
         data-player-layout-density={layoutDensity}
         sx={{
           '--universal-primary-color': primaryColor,
@@ -969,6 +970,7 @@ export default function PlayerControls({
       >
         <Box sx={{ visibility: normalVisible ? 'visible' : 'hidden', pointerEvents: normalVisible ? 'auto' : 'none' }}>
         <Stack
+          data-player-top-controls="true"
           direction="row"
           alignItems="center"
           justifyContent="space-between"
